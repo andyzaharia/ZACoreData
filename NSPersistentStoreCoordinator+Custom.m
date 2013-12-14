@@ -12,13 +12,15 @@
 
 static NSPersistentStoreCoordinator *_sharedPersistentStore = nil;
 static NSString *_dataModelName = nil;
+static NSString *_storeFileName = nil;
 
 + (NSString *)applicationDocumentsDirectory {
     return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
 }
 
-+ (void) setDataModelName: (NSString *) name {
++ (void) setDataModelName: (NSString *) name withStoreName: (NSString *) storeFileName {
     _dataModelName = name;
+    _storeFileName = storeFileName;
 }
 
 +(NSPersistentStoreCoordinator *) sharedPersisntentStoreCoordinator
@@ -26,7 +28,7 @@ static NSString *_dataModelName = nil;
     NSAssert(_dataModelName, @"Core Data model name has not been set. Use [NSPersistentStoreCoordinator setDataModelName:].");
     
     if (!_sharedPersistentStore) {
-        NSString *storePath = [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject] stringByAppendingPathComponent:@"CocoaPodsData.sqlite"];
+        NSString *storePath = [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject] stringByAppendingPathComponent: _storeFileName];
         NSURL *storeUrl = [NSURL fileURLWithPath:storePath];
         
         NSBundle *bundle = [NSBundle mainBundle];
