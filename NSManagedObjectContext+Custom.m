@@ -10,14 +10,28 @@
 
 @implementation NSManagedObjectContext (Custom)
 
-static NSMutableDictionary *_managedObjectContextsDictionary = nil;
+static NSManagedObjectContext   *_masterPrivateContext = nil;
+static NSMutableDictionary      *_managedObjectContextsDictionary = nil;
 
 + (NSString *) generateGUID
 {
-    CFUUIDRef theUUID = CFUUIDCreate(NULL);
-    CFStringRef string = CFUUIDCreateString(NULL, theUUID);
-    CFRelease(theUUID);
-    return (__bridge NSString *)string;
+    CFUUIDRef uuidRef = CFUUIDCreate(NULL);
+    CFStringRef uuidStringRef = CFUUIDCreateString(NULL, uuidRef);
+    CFRelease(uuidRef);
+    NSString *uuid = [NSString stringWithString:(__bridge NSString *) uuidStringRef];
+    CFRelease(uuidStringRef);
+    return uuid;
+}
+
+// Only accessible internally
++ (NSManagedObjectContext *) masterPrivateContext
+{
+    if (!_masterPrivateContext) {
+        _masterPrivateContext = [[NSManagedObjectContext alloc] initWithConcurrencyType: NSPrivateQueueConcurrencyType];
+        _masterPrivateContext.persistentStoreCoordinator = [NSPersistentStoreCoordinator sharedPersisntentStoreCoordinator];
+    }
+    
+    return _masterPrivateContext;
 }
 
 + (NSManagedObjectContext *) contextForMainThread
@@ -29,9 +43,21 @@ static NSMutableDictionary *_managedObjectContextsDictionary = nil;
     NSThread *thread = [NSThread mainThread];
     if (![[thread name] length]) {
         [thread setName: [NSManagedObjectContext generateGUID]];
+        
         NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType: NSMainQueueConcurrencyType];
-        context.persistentStoreCoordinator = [NSPersistentStoreCoordinator sharedPersisntentStoreCoordinator];
+        context.parentContext = [NSManagedObjectContext masterPrivateContext];
         [_managedObjectContextsDictionary setObject:context forKey: [thread name]];
+        
+        NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+        [notificationCenter addObserverForName:NSManagedObjectContextDidSaveNotification
+                                        object:context
+                                         queue:nil
+                                    usingBlock:^(NSNotification *note) {
+                [context performBlockAndWait:^{
+                    [context mergeChangesFromContextDidSaveNotification: note];
+                }];
+        }];
+        
         return context;
     } else {
         return [_managedObjectContextsDictionary objectForKey: [thread name]];
@@ -44,6 +70,11 @@ static NSMutableDictionary *_managedObjectContextsDictionary = nil;
         _managedObjectContextsDictionary = [[NSMutableDictionary alloc] init];
     }
     
+    // Force the return of the main thread context.
+    if ([NSThread isMainThread]) {
+        return [NSManagedObjectContext contextForMainThread];
+    }
+
     NSThread *currentThread = [NSThread currentThread];
     if (![[currentThread name] length]) {
         [currentThread setName: [NSManagedObjectContext generateGUID]];
@@ -80,7 +111,7 @@ static NSMutableDictionary *_managedObjectContextsDictionary = nil;
 + (NSManagedObjectContext *) contextForBackgroundThread
 {
     NSManagedObjectContext *backgroundContext = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
-    backgroundContext.parentContext = [NSManagedObjectContext contextForMainThread];
+    backgroundContext.parentContext = [NSManagedObjectContext masterPrivateContext];
     return backgroundContext;
 }
 

@@ -40,9 +40,12 @@ static NSString *_storeFileName = nil;
         
         NSManagedObjectModel *_managedObjectModel = [[NSManagedObjectModel alloc] initWithContentsOfURL: modelUrl];
         
+        NSDictionary *options = @{NSMigratePersistentStoresAutomaticallyOption: @(YES),
+                                  NSInferMappingModelAutomaticallyOption : @(YES)};
+    
         NSError *error;
         _sharedPersistentStore = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel: _managedObjectModel];
-        if (![_sharedPersistentStore addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:storeUrl options:nil error:&error]) {
+        if (![_sharedPersistentStore addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:storeUrl options:options error:&error]) {
             NSLog(@"Unresolved error %@, %@", error, [error userInfo]);
             abort();
         }
@@ -51,5 +54,9 @@ static NSString *_storeFileName = nil;
     return _sharedPersistentStore;
 }
 
++ (void) setNewPresistentStore: (NSPersistentStoreCoordinator *) store
+{
+    _sharedPersistentStore = store;
+}
 
 @end
